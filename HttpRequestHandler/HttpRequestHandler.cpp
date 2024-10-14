@@ -4,58 +4,62 @@
 
 #include "HttpRequestHandler.h"
 
-namespace HttpRequestHandler {
-    const std::string HttpRequestHandler::Curl_Init_Error_Message = "Failed to initialize curl module.";
-    const std::string HttpRequestHandler::Curl_Request_Error_Message = "Http Request Failed.";
+#include <memory>
 
-    int HttpRequestHandler::instanceCount = 0;
+namespace HttpRequestHandler {
+    std::uint8_t CHttpRequestHandler::s_iInstanceCount = 0;
 
     /** If successful, return a handler ready to use for requests
      *
-     * @param url The base URL to make requests to.
+     * @param a_sUrl The base URL to make requests to.
      */
-    HttpRequestHandler::HttpRequestHandler(const std::string &url) {
-        if (instanceCount == 0) {
+    CHttpRequestHandler::CHttpRequestHandler(const std::string &a_sUrl) {
+        if (s_iInstanceCount == 0) {
             curl_global_init(CURL_GLOBAL_DEFAULT);
         }
 
+        m_pHttpData = std::make_unique<std::string>("");
+
         // init curl module
-        this->curl = curl_easy_init();
+        this->m_pCurl = curl_easy_init();
 
         // check if module initialization was successful
-        if (this->curl) {
+        if (this->m_pCurl) {
             // set url only if module initialization was successful
-            this->requestBaseUrl = url;
-            curl_easy_setopt(this->curl, CURLOPT_URL, url.c_str());
-            instanceCount++;
+            this->m_sRequestBaseUrl = a_sUrl;
+            curl_easy_setopt(this->m_pCurl, CURLOPT_URL, a_sUrl.c_str());
+            // Hook up data handling function.
+            curl_easy_setopt(m_pCurl, CURLOPT_WRITEFUNCTION, CHttpRequestHandler::CurlCallback);
+            curl_easy_setopt(m_pCurl, CURLOPT_WRITEDATA, m_pHttpData.get());
+            s_iInstanceCount++;
         }
         else {
             // throw Runtime Error if module could not be initialized
-            throw std::runtime_error(Curl_Init_Error_Message);
+            throw std::runtime_error(M_S_CURL_ERR_MSG_INIT);
         }
     }
 
-    HttpRequestHandler::~HttpRequestHandler() {
-        curl_easy_cleanup(this->curl);
+    CHttpRequestHandler::~CHttpRequestHandler() {
+        curl_easy_cleanup(this->m_pCurl);
 
-        instanceCount--;
+        s_iInstanceCount--;
 
-        if (instanceCount == 0) {
+        if (s_iInstanceCount == 0) {
             curl_global_cleanup();
         }
     }
 
-    CURLcode HttpRequestHandler::request() {
+    std::string& CHttpRequestHandler::Request() {
         // make request
-        CURLcode result = curl_easy_perform(this->curl);
+        curl_easy_perform(this->m_pCurl);
+        curl_easy_getinfo(m_pCurl, CURLINFO_RESPONSE_CODE, &m_iHttpCode);
 
         // throw Runtime Error if request failed
-        if (result != CURLE_OK) {
-            throw std::runtime_error(Curl_Request_Error_Message);
+        if (m_iHttpCode != M_I_HTTP_CODE_OK) {
+            throw std::runtime_error(M_S_CURL_ERR_MSG_REQUEST);
         }
 
         // return result
-        return result;
-
+        return *m_pHttpData;
     }
 } // HttpRequestHandler
