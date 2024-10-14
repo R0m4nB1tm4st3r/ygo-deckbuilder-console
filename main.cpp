@@ -20,6 +20,7 @@ int main() {
     if (jsonReader.parse(result, jsonData)) {
         // std::cout << jsonData.toStyledString() << std::endl;
         std::cout << jsonData["data"].size() << std::endl;
+        std::cout << jsonData["data"][0].toStyledString();
     }
 
     return 0;
